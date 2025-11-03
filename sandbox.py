@@ -20,7 +20,7 @@ from PIL import Image
 
 # import issue here
 # from pytorch_grad_cam import GradCAM
-# from pytorch_grad_cam import GradCAM#, HiResCAM, ScoreCAM, GradCAMPlusPlus, AblationCAM, XGradCAM, EigenCAM, LayerCAM
+from pytorch_grad_cam import GradCAM, HiResCAM, ScoreCAM, GradCAMPlusPlus, AblationCAM, XGradCAM, EigenCAM, LayerCAM
 # from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 # from pytorch_grad_cam.utils.image import show_cam_on_image
 
@@ -140,48 +140,79 @@ print(custom_model[-1][0].weight[0].reshape(256,14,14)[0])
 ###############
 
 # Mapping of method names to pytorch_grad_cam CAM classes
-# cam_methods = {
-#     "GradCAM": GradCAM}
-#     "HiResCAM": HiResCAM,
-#     "ScoreCAM": ScoreCAM,
-#     "GradCAMPlusPlus": GradCAMPlusPlus,
-#     "AblationCAM": AblationCAM,
-#     "XGradCAM": XGradCAM,
-#     "EigenCAM": EigenCAM,
-#     "LayerCAM": LayerCAM,
-# }
+cam_methods = {
+    "GradCAM": GradCAM,
+    "HiResCAM": HiResCAM,
+    "ScoreCAM": ScoreCAM,
+    "GradCAMPlusPlus": GradCAMPlusPlus,
+    "AblationCAM": AblationCAM,
+    "XGradCAM": XGradCAM,
+    "EigenCAM": EigenCAM,
+    "LayerCAM": LayerCAM,
+}
 
 # choose the cam method
-# choosed_cam_methods = "GradCAM" # @param ["GradCAM", "HiResCAM", "ScoreCAM", "GradCAMPlusPlus", "AblationCAM", "XGradCAM", "EigenCAM", "LayerCAM"]
+choosed_cam_methods = "GradCAM" # @param ["GradCAM", "HiResCAM", "ScoreCAM", "GradCAMPlusPlus", "AblationCAM", "XGradCAM", "EigenCAM", "LayerCAM"]
 
-# # set model to eval mode and give the last rectified activations maps as reference for computations of the saliency maps.
-# custom_model.eval()
-# target_layers = [custom_model[-3]]
+# set model to eval mode and give the last rectified activations maps as reference for computations of the saliency maps.
+custom_model.eval()
+target_layers = [custom_model[-3]]
 
 # # Instantiate the chosen CAM method
-# if choosed_cam_methods in cam_methods:
-#     cam_class = cam_methods[choosed_cam_methods]
-#     cam = cam_class(model=custom_model, target_layers=target_layers)
-# else:
-#     raise ValueError(f"Unsupported CAM method: {choosed_cam_methods}")
+if choosed_cam_methods in cam_methods:
+    cam_class = cam_methods[choosed_cam_methods]
+    cam = cam_class(model=custom_model, target_layers=target_layers)
+else:
+    raise ValueError(f"Unsupported CAM method: {choosed_cam_methods}")
 
-# # target = None means that the saliency maps will be computed for the highest scoring class of each images.
-# grayscale_cam = cam(input_tensor=whole_dataset_batch, targets=None)
+# target = None means that the saliency maps will be computed for the highest scoring class of each images.
+grayscale_cam = cam(input_tensor=whole_dataset_batch, targets=None)
+
+i = 70 #@param {type: 'integer'}
+plt.imshow(np.transpose((whole_dataset_batch[i]/ (1000/225) + 0.5).squeeze().detach().cpu(), (1, 2, 0)), alpha=1)
+plt.axis('off')
+plt.show()
+
+name_to_save = f"img_{i}.png"
+
+image = np.transpose((whole_dataset_batch[i]/ (1000/225) + 0.5).squeeze().detach().cpu(), (1, 2, 0))
+gradCamMaps_tensor = grayscale_cam[i]
+
+
+
+# fig,ax = plt.subplots(1,1,figsize=(15,10))
+
+# ax.imshow(gradCamMaps_tensor, cmap = "jet", alpha = 0.7)
+
+# # plot red hatched line
+# xline_position = image.shape[0] / 1.32
+# ax.axhline(y=xline_position, color='red', linestyle='--', linewidth=4)
+
+# # Add a hatched zone to the left of the vertical line
+# ax.fill_betweenx(y=[xline_position-1/2, image.shape[1]-1/2], x1=-1, x2=image.shape[1], color='red', alpha=0.2, hatch='/')
+
+# # fig setup and save
+# ax.axis('off')
+
+# # Before saving, adjust the figure's layout
+# fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+
+# # Use 'bbox_inches' and 'pad_inches' to remove the white borders
+# fig.savefig(name_to_save, bbox_inches='tight', pad_inches=0)
+
+# plt.show()
+
 
 #########
 # Image #
 #########
 
-i = 70 #@param {type: 'integer'}
-name_to_save = f"img_{i}.png"
 
-image = np.transpose((whole_dataset_batch[i]/ (1000/225) + 0.5).squeeze().detach().cpu(), (1, 2, 0))
-# gradCamMaps_tensor = grayscale_cam[i]
 
-# fig, ax = plt.subplots(1, frameon=False)
+# # fig, ax = plt.subplots(1, frameon=False)
 
-img_height, img_width = image.shape[:2]
-# ax.imshow(image, alpha = 1.)
+# img_height, img_width = image.shape[:2]
+# # ax.imshow(image, alpha = 1.)
 
 ########
 # SHAP #
@@ -189,95 +220,95 @@ img_height, img_width = image.shape[:2]
 
 
 
-masker_blur = shap.maskers.Image("blur(128,128)", image.shape)
+# masker_blur = shap.maskers.Image("blur(128,128)", image.shape)
 
-def nhwc_to_nchw(x: torch.Tensor) -> torch.Tensor:
-    if x.dim() == 4:
-        x = x if x.shape[1] == 3 else x.permute(0, 3, 1, 2)
-    elif x.dim() == 3:
-        x = x if x.shape[0] == 3 else x.permute(2, 0, 1)
-    return x
+# def nhwc_to_nchw(x: torch.Tensor) -> torch.Tensor:
+#     if x.dim() == 4:
+#         x = x if x.shape[1] == 3 else x.permute(0, 3, 1, 2)
+#     elif x.dim() == 3:
+#         x = x if x.shape[0] == 3 else x.permute(2, 0, 1)
+#     return x
 
-def nchw_to_nhwc(x: torch.Tensor) -> torch.Tensor:
-    if x.dim() == 4:
-        x = x if x.shape[3] == 3 else x.permute(0, 2, 3, 1)
-    elif x.dim() == 3:
-        x = x if x.shape[2] == 3 else x.permute(1, 2, 0)
-    return x
+# def nchw_to_nhwc(x: torch.Tensor) -> torch.Tensor:
+#     if x.dim() == 4:
+#         x = x if x.shape[3] == 3 else x.permute(0, 2, 3, 1)
+#     elif x.dim() == 3:
+#         x = x if x.shape[2] == 3 else x.permute(1, 2, 0)
+#     return x
 
-mean = [0.485, 0.456, 0.406]
-std = [0.229, 0.224, 0.225]
+# mean = [0.485, 0.456, 0.406]
+# std = [0.229, 0.224, 0.225]
 
-transform = [
-    torchvision.transforms.Lambda(nhwc_to_nchw),
-    torchvision.transforms.Lambda(lambda x: x * (1 / 255)),
-    torchvision.transforms.Normalize(mean=mean, std=std),
-    torchvision.transforms.Lambda(nchw_to_nhwc),
-]
+# transform = [
+#     torchvision.transforms.Lambda(nhwc_to_nchw),
+#     torchvision.transforms.Lambda(lambda x: x * (1 / 255)),
+#     torchvision.transforms.Normalize(mean=mean, std=std),
+#     torchvision.transforms.Lambda(nchw_to_nhwc),
+# ]
 
-inv_transform = [
-    torchvision.transforms.Lambda(nhwc_to_nchw),
-    torchvision.transforms.Normalize(
-        mean=(-1 * np.array(mean) / np.array(std)).tolist(),
-        std=(1 / np.array(std)).tolist(),
-    ),
-    torchvision.transforms.Lambda(nchw_to_nhwc),
-]
+# inv_transform = [
+#     torchvision.transforms.Lambda(nhwc_to_nchw),
+#     torchvision.transforms.Normalize(
+#         mean=(-1 * np.array(mean) / np.array(std)).tolist(),
+#         std=(1 / np.array(std)).tolist(),
+#     ),
+#     torchvision.transforms.Lambda(nchw_to_nhwc),
+# ]
 
-transform = torchvision.transforms.Compose(transform)
-inv_transform = torchvision.transforms.Compose(inv_transform)
+# transform = torchvision.transforms.Compose(transform)
+# inv_transform = torchvision.transforms.Compose(inv_transform)
 
-# reverting to images from the shap script
-X, y = shap.datasets.imagenet50()
-Xtr = transform(torch.Tensor(X))
+# # reverting to images from the shap script
+# X, y = shap.datasets.imagenet50()
+# Xtr = transform(torch.Tensor(X))
 
-def predict(img: np.ndarray) -> torch.Tensor:
-    img = nhwc_to_nchw(torch.Tensor(img))
-    img = img.to(device)
-    # choose model here
-    output = custom_model(img)
-    return output
+# def predict(img: np.ndarray) -> torch.Tensor:
+#     img = nhwc_to_nchw(torch.Tensor(img))
+#     img = img.to(device)
+#     # choose model here
+#     output = custom_model(img)
+#     return output
 
-# Getting ImageNet 1000 class names
-url = "https://s3.amazonaws.com/deep-learning-models/image-models/imagenet_class_index.json"
-with open(shap.datasets.cache(url)) as file:
-    class_names = [v[1] for v in json.load(file).values()]
-print("Number of ImageNet classes:", len(class_names))
-# print("Class names:", class_names)
+# # Getting ImageNet 1000 class names
+# url = "https://s3.amazonaws.com/deep-learning-models/image-models/imagenet_class_index.json"
+# with open(shap.datasets.cache(url)) as file:
+#     class_names = [v[1] for v in json.load(file).values()]
+# print("Number of ImageNet classes:", len(class_names))
+# # print("Class names:", class_names)
 
-explainer = shap.Explainer(predict, masker_blur, output_names=class_names)
+# explainer = shap.Explainer(predict, masker_blur, output_names=class_names)
 
-topk = 4
-batch_size = 50
-n_evals = 100
+# topk = 4
+# batch_size = 50
+# n_evals = 100
 
-# seems to be wrong format
-# example = transform(image)
+# # seems to be wrong format
+# # example = transform(image)
 
-ex_id = 1
+# ex_id = 1
 
-class_id = np.argmax(predict(Xtr[ex_id].unsqueeze(0))[0].detach().numpy())
+# class_id = np.argmax(predict(Xtr[ex_id].unsqueeze(0))[0].detach().numpy())
 
-shap_values = explainer(
-    Xtr[ex_id:(ex_id+1)],
-    # example.unsqueeze(0),
-    max_evals=n_evals,
-    batch_size=batch_size,
-    outputs=shap.Explanation.argsort.flip[:topk],
-)
+# shap_values = explainer(
+#     Xtr[ex_id:(ex_id+1)],
+#     # example.unsqueeze(0),
+#     max_evals=n_evals,
+#     batch_size=batch_size,
+#     outputs=shap.Explanation.argsort.flip[:topk],
+# )
 
-# something goes wrong with the inverse transform
-shap_values.data = inv_transform(shap_values.data).cpu().numpy()[0]
-shap_values.values = [val for val in np.moveaxis(shap_values.values[0], -1, 0)]
+# # something goes wrong with the inverse transform
+# shap_values.data = inv_transform(shap_values.data).cpu().numpy()[0]
+# shap_values.values = [val for val in np.moveaxis(shap_values.values[0], -1, 0)]
 
-# pembroke is a kind of dog
-shap.image_plot(
-    shap_values=shap_values.values,
-    pixel_values=shap_values.data,
-    labels=shap_values.output_names,
-    # labels=['pembroke', 'candle', 'spotlight', 'digital_clock'],
-    true_labels=[class_names[class_id]],
-)
+# # pembroke is a kind of dog
+# shap.image_plot(
+#     shap_values=shap_values.values,
+#     pixel_values=shap_values.data,
+#     labels=shap_values.output_names,
+#     # labels=['pembroke', 'candle', 'spotlight', 'digital_clock'],
+#     true_labels=[class_names[class_id]],
+# )
 
 
 
