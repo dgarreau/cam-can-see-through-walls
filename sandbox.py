@@ -7,6 +7,8 @@ Attempting to reproduce experiments from Magamed's paper
 """
 
 import torch
+import torchvision
+
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -21,6 +23,11 @@ from PIL import Image
 # from pytorch_grad_cam import GradCAM#, HiResCAM, ScoreCAM, GradCAMPlusPlus, AblationCAM, XGradCAM, EigenCAM, LayerCAM
 # from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 # from pytorch_grad_cam.utils.image import show_cam_on_image
+
+import numpy as np
+
+import json
+import shap
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
@@ -160,6 +167,119 @@ print(custom_model[-1][0].weight[0].reshape(256,14,14)[0])
 
 # # target = None means that the saliency maps will be computed for the highest scoring class of each images.
 # grayscale_cam = cam(input_tensor=whole_dataset_batch, targets=None)
+
+#########
+# Image #
+#########
+
+i = 70 #@param {type: 'integer'}
+name_to_save = f"img_{i}.png"
+
+image = np.transpose((whole_dataset_batch[i]/ (1000/225) + 0.5).squeeze().detach().cpu(), (1, 2, 0))
+# gradCamMaps_tensor = grayscale_cam[i]
+
+# fig, ax = plt.subplots(1, frameon=False)
+
+img_height, img_width = image.shape[:2]
+# ax.imshow(image, alpha = 1.)
+
+########
+# SHAP #
+########
+
+
+
+masker_blur = shap.maskers.Image("blur(128,128)", image.shape)
+
+def nhwc_to_nchw(x: torch.Tensor) -> torch.Tensor:
+    if x.dim() == 4:
+        x = x if x.shape[1] == 3 else x.permute(0, 3, 1, 2)
+    elif x.dim() == 3:
+        x = x if x.shape[0] == 3 else x.permute(2, 0, 1)
+    return x
+
+def nchw_to_nhwc(x: torch.Tensor) -> torch.Tensor:
+    if x.dim() == 4:
+        x = x if x.shape[3] == 3 else x.permute(0, 2, 3, 1)
+    elif x.dim() == 3:
+        x = x if x.shape[2] == 3 else x.permute(1, 2, 0)
+    return x
+
+mean = [0.485, 0.456, 0.406]
+std = [0.229, 0.224, 0.225]
+
+transform = [
+    torchvision.transforms.Lambda(nhwc_to_nchw),
+    torchvision.transforms.Lambda(lambda x: x * (1 / 255)),
+    torchvision.transforms.Normalize(mean=mean, std=std),
+    torchvision.transforms.Lambda(nchw_to_nhwc),
+]
+
+inv_transform = [
+    torchvision.transforms.Lambda(nhwc_to_nchw),
+    torchvision.transforms.Normalize(
+        mean=(-1 * np.array(mean) / np.array(std)).tolist(),
+        std=(1 / np.array(std)).tolist(),
+    ),
+    torchvision.transforms.Lambda(nchw_to_nhwc),
+]
+
+transform = torchvision.transforms.Compose(transform)
+inv_transform = torchvision.transforms.Compose(inv_transform)
+
+# reverting to images from the shap script
+X, y = shap.datasets.imagenet50()
+Xtr = transform(torch.Tensor(X))
+
+def predict(img: np.ndarray) -> torch.Tensor:
+    img = nhwc_to_nchw(torch.Tensor(img))
+    img = img.to(device)
+    # choose model here
+    output = custom_model(img)
+    return output
+
+# Getting ImageNet 1000 class names
+url = "https://s3.amazonaws.com/deep-learning-models/image-models/imagenet_class_index.json"
+with open(shap.datasets.cache(url)) as file:
+    class_names = [v[1] for v in json.load(file).values()]
+print("Number of ImageNet classes:", len(class_names))
+# print("Class names:", class_names)
+
+explainer = shap.Explainer(predict, masker_blur, output_names=class_names)
+
+topk = 4
+batch_size = 50
+n_evals = 100
+
+# seems to be wrong format
+# example = transform(image)
+
+ex_id = 1
+
+class_id = np.argmax(predict(Xtr[ex_id].unsqueeze(0))[0].detach().numpy())
+
+shap_values = explainer(
+    Xtr[ex_id:(ex_id+1)],
+    # example.unsqueeze(0),
+    max_evals=n_evals,
+    batch_size=batch_size,
+    outputs=shap.Explanation.argsort.flip[:topk],
+)
+
+# something goes wrong with the inverse transform
+shap_values.data = inv_transform(shap_values.data).cpu().numpy()[0]
+shap_values.values = [val for val in np.moveaxis(shap_values.values[0], -1, 0)]
+
+# pembroke is a kind of dog
+shap.image_plot(
+    shap_values=shap_values.values,
+    pixel_values=shap_values.data,
+    labels=shap_values.output_names,
+    # labels=['pembroke', 'candle', 'spotlight', 'digital_clock'],
+    true_labels=[class_names[class_id]],
+)
+
+
 
 
 
