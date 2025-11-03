@@ -16,7 +16,8 @@ import torchvision
 import torchvision.transforms as transforms
 from PIL import Image
 
-# compatibility issues, need to downgrade numpy??
+# import issue here
+# from pytorch_grad_cam import GradCAM
 # from pytorch_grad_cam import GradCAM#, HiResCAM, ScoreCAM, GradCAMPlusPlus, AblationCAM, XGradCAM, EigenCAM, LayerCAM
 # from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 # from pytorch_grad_cam.utils.image import show_cam_on_image
@@ -116,16 +117,52 @@ with torch.no_grad():
 # load the masked VGG16-like model or not.
 masked = True #@param {type: 'boolean'}
 
+# adding some options in load because deprecated + cpu only
 if masked:
-  checkpoint = torch.load(weights_path + "/params_vgg16_masked.pt",weights_only=False)
+  checkpoint = torch.load(weights_path + "/params_vgg16_masked.pt",weights_only=False,map_location=torch.device('cpu'))
 else:
   checkpoint = torch.load(weights_path + "/params_vgg16_baseline.pt", map_location='cuda:0')
 
 custom_model.load_state_dict(checkpoint)
 
+# sanity check of masking. Should be all zeros in the 9 last lines of the weights if the masked model is loaded.
+print(custom_model[-1][0].weight[0].reshape(256,14,14)[0])
+
+###############
+# CAM methods #
+###############
+
+# Mapping of method names to pytorch_grad_cam CAM classes
+# cam_methods = {
+#     "GradCAM": GradCAM}
+#     "HiResCAM": HiResCAM,
+#     "ScoreCAM": ScoreCAM,
+#     "GradCAMPlusPlus": GradCAMPlusPlus,
+#     "AblationCAM": AblationCAM,
+#     "XGradCAM": XGradCAM,
+#     "EigenCAM": EigenCAM,
+#     "LayerCAM": LayerCAM,
+# }
+
+# choose the cam method
+# choosed_cam_methods = "GradCAM" # @param ["GradCAM", "HiResCAM", "ScoreCAM", "GradCAMPlusPlus", "AblationCAM", "XGradCAM", "EigenCAM", "LayerCAM"]
+
+# # set model to eval mode and give the last rectified activations maps as reference for computations of the saliency maps.
+# custom_model.eval()
+# target_layers = [custom_model[-3]]
+
+# # Instantiate the chosen CAM method
+# if choosed_cam_methods in cam_methods:
+#     cam_class = cam_methods[choosed_cam_methods]
+#     cam = cam_class(model=custom_model, target_layers=target_layers)
+# else:
+#     raise ValueError(f"Unsupported CAM method: {choosed_cam_methods}")
+
+# # target = None means that the saliency maps will be computed for the highest scoring class of each images.
+# grayscale_cam = cam(input_tensor=whole_dataset_batch, targets=None)
 
 
-# bloque ici, les modeles n'ont pas l'air d'etre sur le serveur. envoye un mail a MT le 01.11
+
 
 
 
